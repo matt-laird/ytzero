@@ -14,6 +14,9 @@ import { collectDiagnosticSnapshot } from "./diagnostics";
 import { migrateLegacyProfileAvatars } from "./profileAvatars";
 import { flushTubeArchivistWatched, scheduleTubeArchivistSync } from "./tubeArchivist";
 import { environmentAuthMethod, environmentAuthPasswordConfigured } from "./authEnvironment";
+import { initUpstreamFetcher } from "./upstreamFetcher";
+
+initUpstreamFetcher();
 
 if (environmentAuthMethod() && !environmentAuthPasswordConfigured()) {
   log.error("auth.environment_password_missing", {

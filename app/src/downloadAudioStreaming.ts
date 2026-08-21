@@ -9,6 +9,7 @@ import { defaultAudioDiagnostic, type AudioDiagnostic } from "./audioDiagnostics
 import { createAudioSourceResolver, type AudioSource } from "./audioSourceResolver";
 import { googleVideoHost, safeGoogleVideoUrl } from "./audioUpstreamUrl";
 import { createDownloadAudioVodStreaming } from "./downloadAudioVodStreaming";
+import { getUpstreamFetcher } from "./upstreamFetcher";
 
 interface DownloadAudioStreamingDependencies {
   YTDLP: string;
@@ -74,6 +75,20 @@ export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamin
     range: AudioByteRange,
     signal: AbortSignal,
   ): Promise<Response | null> {
+    const upstream = getUpstreamFetcher();
+    if (upstream.mode === "piped_proxy") {
+      try {
+        return await upstream.fetch(sourceUrl, {
+          headers: { "User-Agent": "Mozilla/5.0", Range: audioRangeHeader(range) },
+          signal,
+        });
+      } catch {
+        if (!signal.aborted) audioDiagnostic("warn", "audio.upstream_failed", {
+          userId, videoId, reason: "network_error", rangeStart: range.start, rangeEnd: range.end,
+        });
+        return null;
+      }
+    }
     let currentUrl = sourceUrl;
     for (let hop = 0; hop <= AUDIO_REDIRECT_LIMIT; hop++) {
       let response: Response;

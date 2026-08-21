@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { database } from "./database";
 import { isAllowedRemoteImageUrl, isValidImagePayload, videoIdFromThumbnailUrl } from "./imageCachePolicy";
 import { imageCacheTableSql, POSTGRES_IMAGE_CACHE_TIMESTAMP_MIGRATION } from "./imageCacheSchema";
+import { getUpstreamFetcher } from "./upstreamFetcher";
 
 const IMG_DIR = process.env.IMG_CACHE_DIR ?? resolve(import.meta.dir, "../../data/imgcache");
 mkdirSync(IMG_DIR, { recursive: true });
@@ -87,7 +88,8 @@ async function download(url: string): Promise<Row | null> {
   const temporaryPath = `${path}.${randomUUID()}.tmp`;
   const now = Date.now();
   try {
-    const res = await fetch(url, {
+    const upstream = getUpstreamFetcher();
+    const res = await upstream.fetch(url, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",

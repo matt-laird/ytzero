@@ -1,3 +1,5 @@
+import { getUpstreamFetcher } from "./upstreamFetcher";
+
 export function safeGoogleVideoUrl(candidate: string, base?: string): string | null {
   try {
     const url = base ? new URL(candidate, base) : new URL(candidate);
@@ -27,6 +29,12 @@ export async function fetchGoogleVideoResponse(
   candidate: string,
   init: RequestInit,
 ): Promise<Response | null> {
+  const upstream = getUpstreamFetcher();
+  if (upstream.mode === "piped_proxy") {
+    const url = safeGoogleVideoUrl(candidate);
+    if (!url) return null;
+    return upstream.fetch(url, init).catch(() => null);
+  }
   let currentUrl = safeGoogleVideoUrl(candidate);
   if (!currentUrl) return null;
   for (let hop = 0; hop <= GOOGLE_VIDEO_REDIRECT_LIMIT; hop += 1) {
