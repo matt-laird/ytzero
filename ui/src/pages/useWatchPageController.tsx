@@ -141,6 +141,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
   const [cinemaVisible, setCinemaVisible] = useState(() => localStorage.getItem(CINEMA_MODE_KEY) === "1");
   const [sbSegments, setSbSegments] = useState<SponsorSegment[]>([]);
   const [appUrl, setAppUrl] = useState("");
+  const [ytProxy, setYtProxy] = useState(false);
   const [sbPaused, setSbPaused] = useState(false);
   const [disabledSegs, setDisabledSegs] = useState<Set<string>>(new Set());
   const [chapters, setChapters] = useState<VideoChapter[]>([]);
@@ -245,7 +246,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
 
   useEffect(() => {
     api.settings().then((r) => setSettings(r.settings)).catch(() => setSettings(null));
-    api.config().then((r) => setAppUrl(r.app_url)).catch(() => {});
+    api.config().then((r) => { setAppUrl(r.app_url); setYtProxy(r.yt_proxy); }).catch(() => {});
     let cancelled = false;
     void (async () => {
       const [childStatus, downloadConfig] = await Promise.all([
@@ -283,7 +284,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
   // Which surface fills the player area. Children never get a choice: with
   // downloads_only they are locked to local files, otherwise plain YouTube.
   const watchMode = downloadsEnabled && !isChildProfile ? downloadWatchMode : "youtube";
-  const streamingEnabled = experimentalStreaming && !isChildProfile && !skipStreaming;
+  const streamingEnabled = (experimentalStreaming || ytProxy) && !isChildProfile && !skipStreaming;
   const playerKind = resolvePlayerKind({
     hasVideo: !!matchingVideo,
     isLive: matchingVideo?.live_status === "live" || matchingVideo?.live_status === "upcoming",
@@ -296,6 +297,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     watchMode,
     streamingEnabled,
     keepStreamingAfterDownload: downloadReadyToReload,
+    ytProxy,
   });
   const downloadFeedbackKind = downloadReadyToReload ? "ready" : downloadRequestError || downloadStatus === "error" ? "error" : downloadStatus === "downloading" ? "downloading" : "queued";
   const downloadFeedbackVisible = downloadReadyToReload || downloadRequestError || downloadStatus === "queued" || downloadStatus === "downloading" || downloadStatus === "error";

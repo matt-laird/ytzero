@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { computeQHash } from "./pipedProxyHash";
+import { computeQHash } from "./ytProxyHash";
 
 describe("computeQHash", () => {
   const secret = "test_secret";

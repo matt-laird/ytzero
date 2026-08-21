@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { computeQHash } from "./pipedProxyHash";
+import { computeQHash } from "./ytProxyHash";
 
-describe("piped proxy URL rewriting", () => {
+describe("YT proxy URL rewriting", () => {
   const secret = "test_secret";
   const proxyBase = "https://proxy.example.com";
 

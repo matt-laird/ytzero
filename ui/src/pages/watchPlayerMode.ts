@@ -24,11 +24,19 @@ export function resolvePlayerKind(input: {
   watchMode: WatchSourceMode;
   streamingEnabled: boolean;
   keepStreamingAfterDownload: boolean;
+  ytProxy?: boolean;
 }): PlayerKind {
   const canStream = input.hasVideo && input.streamingEnabled && input.playerSource === "auto" && input.sourceChoice !== "youtube";
   // A stream is not a stable local file. Even if an old download row exists,
   // always use YouTube while the broadcast is live or scheduled.
-  if (input.hasVideo && input.isLive) return "youtube";
+  if (input.hasVideo && input.isLive && !input.ytProxy) return "youtube";
+  // YT proxy mode: always stream instead of using the YouTube iframe.
+  if (input.ytProxy && input.hasVideo) {
+    if ((input.downloadStatus === "done" || input.localMediaSource === "tubearchivist") && input.playerSource === "auto") return "local";
+    if (!input.playbackPolicyReady) return "loading";
+    if (input.childDownloadsOnly) return "blocked";
+    return "stream";
+  }
   // Finishing the background download must not tear down a stream that is
   // already playing. The viewer explicitly hands off to the local file.
   if (canStream && input.keepStreamingAfterDownload && input.downloadStatus === "done") return "stream";

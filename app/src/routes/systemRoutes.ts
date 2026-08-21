@@ -7,6 +7,8 @@ import { checkLatestRelease } from "../updates";
 import { COMMIT, VERSION } from "../version";
 import { refreshAll } from "../refresher";
 
+import { getUpstreamFetcher } from "../upstreamFetcher";
+
 type ApiEnvironment = { Variables: { userId: number; sessionAdmin?: boolean; profileAdmin?: boolean } };
 type Api = Hono<ApiEnvironment>;
 type ApiContext = Context<ApiEnvironment>;
@@ -20,7 +22,10 @@ export function registerSystemRoutes(
 ): void {
   const { isAdmin, currentUserId } = access;
 api.get("/config", (c) => {
-  return c.json({ app_url: process.env.APP_URL ?? "" });
+  return c.json({
+    app_url: process.env.APP_URL ?? "",
+    yt_proxy: getUpstreamFetcher().mode === "yt_proxy",
+  });
 });
 
 api.get("/events", (c) => {

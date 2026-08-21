@@ -1,11 +1,11 @@
-import { computeQHash } from "./pipedProxyHash";
+import { computeQHash } from "./ytProxyHash";
 import { log } from "./logger";
 
 export interface UpstreamFetcher {
   fetch(url: string, init?: RequestInit): Promise<Response>;
   /** Rewrite a YouTube-domain URL to the upstream target (identity for direct, proxy URL for piped). */
   rewriteUrl(url: string): string;
-  readonly mode: "direct" | "piped_proxy";
+  readonly mode: "direct" | "yt_proxy";
 }
 
 function createDirectFetcher(): UpstreamFetcher {
@@ -16,7 +16,7 @@ function createDirectFetcher(): UpstreamFetcher {
   };
 }
 
-function createPipedProxyFetcher(proxyBaseUrl: string, secret: string): UpstreamFetcher {
+function createProxyFetcher(proxyBaseUrl: string, secret: string): UpstreamFetcher {
   const base = proxyBaseUrl.replace(/\/+$/, "");
 
   function rewriteUrl(originalUrl: string): string {
@@ -34,7 +34,7 @@ function createPipedProxyFetcher(proxyBaseUrl: string, secret: string): Upstream
   }
 
   return {
-    mode: "piped_proxy",
+    mode: "yt_proxy",
     rewriteUrl,
     async fetch(url: string, init?: RequestInit): Promise<Response> {
       const rewritten = rewriteUrl(url);
@@ -46,23 +46,23 @@ function createPipedProxyFetcher(proxyBaseUrl: string, secret: string): Upstream
 let singleton: UpstreamFetcher | null = null;
 
 export function initUpstreamFetcher(): UpstreamFetcher {
-  const proxyUrl = process.env.PIPED_PROXY_URL?.trim();
+  const proxyUrl = process.env.YT_PROXY_URL?.trim();
   if (!proxyUrl) {
     singleton = createDirectFetcher();
     log.info("upstream.mode", { mode: "direct" });
     return singleton;
   }
 
-  const secret = process.env.PIPED_PROXY_SECRET?.trim();
+  const secret = process.env.YT_PROXY_SECRET?.trim();
   if (!secret) {
     log.error("upstream.missing_secret", {
-      message: "PIPED_PROXY_URL is set but PIPED_PROXY_SECRET is missing — cannot start",
+      message: "YT_PROXY_URL is set but YT_PROXY_SECRET is missing — cannot start",
     });
     process.exit(1);
   }
 
-  singleton = createPipedProxyFetcher(proxyUrl, secret);
-  log.info("upstream.mode", { mode: "piped_proxy", proxyUrl });
+  singleton = createProxyFetcher(proxyUrl, secret);
+  log.info("upstream.mode", { mode: "yt_proxy", proxyUrl });
   return singleton;
 }
 

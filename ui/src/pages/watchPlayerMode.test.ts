@@ -87,6 +87,33 @@ describe("resolvePlayerKind", () => {
     });
   });
 
+  describe("YT proxy mode", () => {
+    test("always streams instead of using the YouTube iframe", () => {
+      expect(resolvePlayerKind({ ...base, ytProxy: true, streamingEnabled: true })).toBe("stream");
+      expect(resolvePlayerKind({ ...base, ytProxy: true, streamingEnabled: true, watchMode: "youtube" })).toBe("stream");
+    });
+
+    test("still plays a finished local file", () => {
+      expect(resolvePlayerKind({ ...base, ytProxy: true, streamingEnabled: true, downloadStatus: "done" })).toBe("local");
+    });
+
+    test("still plays TubeArchivist media as local", () => {
+      expect(resolvePlayerKind({ ...base, ytProxy: true, streamingEnabled: true, localMediaSource: "tubearchivist" })).toBe("local");
+    });
+
+    test("streams live broadcasts instead of using the YouTube iframe", () => {
+      expect(resolvePlayerKind({ ...base, ytProxy: true, streamingEnabled: true, isLive: true })).toBe("stream");
+    });
+
+    test("blocks downloads-only child profiles", () => {
+      expect(resolvePlayerKind({ ...base, ytProxy: true, streamingEnabled: true, childDownloadsOnly: true })).toBe("blocked");
+    });
+
+    test("does not offer the YouTube fallback choice", () => {
+      expect(resolvePlayerKind({ ...base, ytProxy: true, streamingEnabled: true, watchMode: "ask" })).toBe("stream");
+    });
+  });
+
 });
 
 describe("shouldLatchCompletedDownload", () => {

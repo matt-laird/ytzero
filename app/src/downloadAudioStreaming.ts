@@ -76,7 +76,7 @@ export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamin
     signal: AbortSignal,
   ): Promise<Response | null> {
     const upstream = getUpstreamFetcher();
-    if (upstream.mode === "piped_proxy") {
+    if (upstream.mode === "yt_proxy") {
       try {
         return await upstream.fetch(sourceUrl, {
           headers: { "User-Agent": "Mozilla/5.0", Range: audioRangeHeader(range) },

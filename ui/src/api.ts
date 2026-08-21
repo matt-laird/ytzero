@@ -473,7 +473,7 @@ export const api = {
   resolveChildTimeRequest: (id: number, action: "dismiss" | "approve", grant?: ChildGrant, pin?: string) =>
     http<{ ok: boolean }>(`/child/time-requests/${id}/resolve`, { method: "POST", body: JSON.stringify({ action, grant, pin }) }),
 
-  config: () => sharedGet<{ app_url: string }>("config", "/config"),
+  config: () => sharedGet<{ app_url: string; yt_proxy: boolean }>("config", "/config"),
   // ---------- authentication ----------
   authStatus: () => sharedGet<AuthStatus>("auth-status", "/auth/status"),
   passwordLogin: (username: string, password: string) =>

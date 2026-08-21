@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import "./ShortsPlayer.css";
 import { ChevronDown, ChevronUp, Heart, Share2, X } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -23,6 +23,101 @@ function loadYouTubeApi(): Promise<void> {
     });
   }
   return ytApiReady;
+}
+
+interface SlotPlayer {
+  play(): void;
+  pause(): void;
+  load(videoId: string): void;
+  getState(): number;
+  destroy(): void;
+}
+
+function createYtSlotPlayer(
+  container: HTMLDivElement,
+  slotIndex: number,
+  currentSlotRef: MutableRefObject<number>,
+  slotsRef: MutableRefObject<SlotState[]>,
+  videosRef: MutableRefObject<Video[]>,
+  onWatched: MutableRefObject<(videoId: string) => void>,
+): SlotPlayer {
+  const w = window as any;
+  const inner = document.createElement("div");
+  container.appendChild(inner);
+  let state = -1;
+  const player = new w.YT.Player(inner, {
+    width: "100%",
+    height: "100%",
+    playerVars: {
+      autoplay: 0,
+      controls: 0,
+      fs: 0,
+      rel: 0,
+      cc_load_policy: 0,
+      iv_load_policy: 3,
+      disablekb: 1,
+      playsinline: 1,
+      origin: window.location.origin,
+    },
+    events: {
+      onStateChange: (event: any) => {
+        state = event.data;
+        if (event.data === 1 && slotIndex !== currentSlotRef.current) {
+          event.target.pauseVideo();
+        }
+        if (event.data === 0 && slotIndex === currentSlotRef.current) {
+          const videoIdx = slotsRef.current[slotIndex]?.videoIdx;
+          const completed = videoIdx == null ? undefined : videosRef.current[videoIdx];
+          if (completed && !isIncognitoMode()) {
+            api.complete(completed.video_id).catch(() => {});
+            onWatched.current(completed.video_id);
+          }
+        }
+      },
+    },
+  });
+  return {
+    play() { try { player.playVideo(); } catch {} },
+    pause() { try { player.pauseVideo(); } catch {} },
+    load(videoId: string) { try { player.loadVideoById(videoId); } catch {} },
+    getState() { return state; },
+    destroy() { try { player.destroy(); } catch {} },
+  };
+}
+
+function createStreamSlotPlayer(
+  container: HTMLDivElement,
+  slotIndex: number,
+  currentSlotRef: MutableRefObject<number>,
+  slotsRef: MutableRefObject<SlotState[]>,
+  videosRef: MutableRefObject<Video[]>,
+  onWatched: MutableRefObject<(videoId: string) => void>,
+): SlotPlayer {
+  const video = document.createElement("video");
+  video.style.cssText = "width:100%;height:100%;object-fit:contain;background:#000";
+  video.playsInline = true;
+  video.setAttribute("playsinline", "");
+  container.appendChild(video);
+  video.addEventListener("ended", () => {
+    if (slotIndex === currentSlotRef.current) {
+      const videoIdx = slotsRef.current[slotIndex]?.videoIdx;
+      const completed = videoIdx == null ? undefined : videosRef.current[videoIdx];
+      if (completed && !isIncognitoMode()) {
+        api.complete(completed.video_id).catch(() => {});
+        onWatched.current(completed.video_id);
+      }
+    }
+  });
+  return {
+    play() { video.play().catch(() => {}); },
+    pause() { video.pause(); },
+    load(videoId: string) {
+      video.src = api.hlsUrl(videoId);
+      video.load();
+    },
+    getState() { return video.paused ? 2 : video.ended ? 0 : 1; },
+    destroy() { video.pause(); video.removeAttribute("src"); video.load(); video.remove(); },
+  };
 }
 
 const TRANS_MS = 360;
@@ -52,6 +147,7 @@ export default function ShortsPlayer({
   socialEnabled,
   sharing,
   onShare,
+  ytProxy = false,
 }: {
   videos: Video[];
   initialIndex: number;
@@ -63,6 +159,7 @@ export default function ShortsPlayer({
   socialEnabled: boolean;
   sharing: boolean;
   onShare: (video: Video) => void;
+  ytProxy?: boolean;
 }) {
   const { t } = useI18n();
   // Stable refs for callbacks & videos to avoid stale closures
@@ -100,8 +197,8 @@ export default function ShortsPlayer({
   const slotsRef = useRef(slots);
   useEffect(() => { slotsRef.current = slots; }, [slots]);
 
-  // YT player instances (one per slot, lazily created)
-  const playerRefs = useRef<(any | null)[]>([null, null, null]);
+  // Player instances (one per slot, lazily created)
+  const playerRefs = useRef<(SlotPlayer | null)[]>([null, null, null]);
   const slotElemRefs = [
     useRef<HTMLDivElement>(null),
     useRef<HTMLDivElement>(null),
@@ -112,76 +209,42 @@ export default function ShortsPlayer({
   // Non-current slots start playing immediately (for buffer preload) but are
   // paused by the onStateChange handler the moment playback begins.
   const ensurePlayer = useCallback((s: number, videoId: string, autoplay = false) => {
-    const w = window as any;
-    if (!w.YT?.Player) return;
     if (playerRefs.current[s]) {
-      // loadVideoById triggers buffering; onStateChange handles auto-pause for non-current slots
-      playerRefs.current[s].loadVideoById(videoId);
+      playerRefs.current[s]!.load(videoId);
+      if (autoplay) playerRefs.current[s]!.play();
     } else {
       const container = slotElemRefs[s].current;
       if (!container) return;
-      const inner = document.createElement("div");
-      container.appendChild(inner);
-      playerRefs.current[s] = new w.YT.Player(inner, {
-        videoId,
-        width: "100%",
-        height: "100%",
-        playerVars: {
-          autoplay: 1, // always start to trigger buffering; non-current slots are paused below
-          controls: 0,
-          fs: 0,
-          rel: 0,
-          cc_load_policy: 0,
-          iv_load_policy: 3,
-          disablekb: 1,
-          playsinline: 1,
-          origin: window.location.origin,
-        },
-        events: {
-          onStateChange: (event: any) => {
-            // Pause any slot that starts playing while it's not the active one
-            if (event.data === 1 /* PLAYING */ && s !== currentSlotRef.current) {
-              event.target.pauseVideo();
-            }
-            if (event.data === 0 /* ENDED */ && s === currentSlotRef.current) {
-              const videoIdx = slotsRef.current[s]?.videoIdx;
-              const completed = videoIdx == null ? undefined : videosRef.current[videoIdx];
-              if (completed) {
-                if (!isIncognitoMode()) {
-                  api.complete(completed.video_id).catch(() => {});
-                  onWatchedRef.current(completed.video_id);
-                }
-              }
-            }
-          },
-        },
-      });
-      // If this slot shouldn't autoplay yet (it's a neighbour), pause it once ready
-      if (!autoplay) {
-        playerRefs.current[s].addEventListener?.("onReady", () => {
-          if (s !== currentSlotRef.current) playerRefs.current[s]?.pauseVideo();
-        });
-      }
+      const player = ytProxy
+        ? createStreamSlotPlayer(container, s, currentSlotRef, slotsRef, videosRef, onWatchedRef)
+        : createYtSlotPlayer(container, s, currentSlotRef, slotsRef, videosRef, onWatchedRef);
+      playerRefs.current[s] = player;
+      player.load(videoId);
+      if (autoplay) player.play();
     }
-  }, []);
+  }, [ytProxy]);
 
   // Init on mount: create players for whichever slots have a video
   useEffect(() => {
     let destroyed = false;
-    loadYouTubeApi().then(() => {
+    const init = () => {
       if (destroyed) return;
       const initSlots = slotsRef.current;
       for (let s = 0; s < NUM_SLOTS; s++) {
         const vidI = initSlots[s].videoIdx;
         if (vidI === null || vidI < 0 || vidI >= videosRef.current.length) continue;
-        ensurePlayer(s, videosRef.current[vidI].video_id, s === 1 /* autoplay current */);
+        ensurePlayer(s, videosRef.current[vidI].video_id, s === 1);
       }
-      // Opening a Short adds it to history; completion is recorded on ENDED.
       const initVid = videosRef.current[initialIndex];
       if (initVid) {
         if (!isIncognitoMode()) api.watch(initVid.video_id).catch(() => {});
       }
-    });
+    };
+    if (ytProxy) {
+      init();
+    } else {
+      loadYouTubeApi().then(init);
+    }
     return () => {
       destroyed = true;
       playerRefs.current.forEach((p) => p?.destroy());
@@ -233,8 +296,8 @@ export default function ShortsPlayer({
       setVidIdx(newVidIdx);
 
       // Swap playback
-      playerRefs.current[cs]?.pauseVideo();
-      playerRefs.current[targetSlot]?.playVideo();
+      playerRefs.current[cs]?.pause();
+      playerRefs.current[targetSlot]?.play();
 
       // Remove all transitions
       setSlots((prev) => prev.map((s) => ({ ...s, animate: false })));
@@ -265,8 +328,8 @@ export default function ShortsPlayer({
         case " ": {
           e.preventDefault();
           const p = playerRefs.current[currentSlotRef.current];
-          const state = p?.getPlayerState();
-          if (state === 1) p?.pauseVideo(); else p?.playVideo();
+          const state = p?.getState();
+          if (state === 1) p?.pause(); else p?.play();
           break;
         }
       }

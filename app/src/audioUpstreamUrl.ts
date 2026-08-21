@@ -30,7 +30,7 @@ export async function fetchGoogleVideoResponse(
   init: RequestInit,
 ): Promise<Response | null> {
   const upstream = getUpstreamFetcher();
-  if (upstream.mode === "piped_proxy") {
+  if (upstream.mode === "yt_proxy") {
     const url = safeGoogleVideoUrl(candidate);
     if (!url) return null;
     return upstream.fetch(url, init).catch(() => null);

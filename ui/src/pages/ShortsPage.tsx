@@ -36,6 +36,7 @@ export default function ShortsPage() {
   const [likedIds, setLikedIds] = useState<Map<string, boolean>>(new Map());
   const [socialEnabled, setSocialEnabled] = useState(false);
   const [socialShareVideo, setSocialShareVideo] = useState<Video | null>(null);
+  const [ytProxy, setYtProxy] = useState(false);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const hasMoreRef = useRef(true);
   const loadingMoreRef = useRef(false);
@@ -76,6 +77,7 @@ export default function ShortsPage() {
     void loadSocial();
     return subscribe("plugins-changed", loadSocial);
   }, []);
+  useEffect(() => { api.config().then((r) => setYtProxy(r.yt_proxy)).catch(() => {}); }, []);
 
   useEffect(() => {
     const el = loadMoreRef.current;
@@ -243,6 +245,7 @@ export default function ShortsPage() {
           socialEnabled={socialEnabled}
           sharing={Boolean(socialShareVideo)}
           onShare={setSocialShareVideo}
+          ytProxy={ytProxy}
         />
       )}
 
